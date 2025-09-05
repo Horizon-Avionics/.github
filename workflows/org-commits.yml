@@ -1,0 +1,52 @@
+name: Update Org Commits
+on:
+  schedule:
+    - cron: "0 0 * * *"   # run daily at midnight UTC
+  workflow_dispatch:       # manual trigger
+
+jobs:
+  update-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Count Commits
+        env:
+          ORG: Horizon-Avionics
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OUTPUT="COMMITS.md"
+          echo "## 📈 Commit Activity for $ORG" > $OUTPUT
+          echo "" >> $OUTPUT
+
+          page=1
+          total=0
+
+          while true; do
+            repos=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/orgs/$ORG/repos?per_page=100&page=$page" | jq -r '.[].full_name')
+
+            [ -z "$repos" ] && break
+
+            for repo in $repos; do
+              commits=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+                "https://api.github.com/repos/$repo/stats/commit_activity" | jq '[.[].total] | add')
+              commits=${commits:-0}
+              total=$((total + commits))
+              echo "- [$repo](https://github.com/$repo): $commits commits (last year)" >> $OUTPUT
+            done
+
+            page=$((page+1))
+          done
+
+          echo "" >> $OUTPUT
+          echo "**Total commits across org (last 12 months): $total**" >> $OUTPUT
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update commit stats"
+          commit_user_name: "Horizon Bot"
+          commit_user_email: "bot@horizon.org"
+          file_pattern: "COMMITS.md"
