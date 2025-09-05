@@ -1,0 +1,43 @@
+name: Update Org Stats
+on:
+  schedule:
+    - cron: "0 0 * * *"  # runs daily at midnight UTC
+  workflow_dispatch:      # allows manual trigger
+
+jobs:
+  update-org-stats:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repo
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # Set up Node.js (needed for github-readme-stats API calls, optional if using curl)
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      # Generate the org stats markdown
+      - name: Generate Org Stats
+        run: |
+          ORG="Horizon-Avionics"
+          OUTPUT="STATS.md"
+          echo "## 🌌 $ORG GitHub Stats" > $OUTPUT
+          echo "" >> $OUTPUT
+
+          # Loop through all public repos
+          curl -s "https://api.github.com/orgs/$ORG/repos?per_page=100" | \
+          jq -r '.[] | "- [\(.name)](\(.html_url)) ⭐ \(.stargazers_count) | 🍴 \(.forks_count) | 🐛 \(.open_issues_count)"' >> $OUTPUT
+
+          echo "" >> $OUTPUT
+          echo "Generated on $(date)" >> $OUTPUT
+
+      # Commit the updated stats file
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update org stats"
+          commit_user_name: "Horizon Bot"
+          commit_user_email: "bot@horizon.org"
+          file_pattern: "STATS.md"
